@@ -84,6 +84,10 @@
 #define HAVE_PD_EN 0
 #endif
 
+#ifndef CONFIG_POWER_ON_AC
+#define CONFIG_POWER_ON_AC 0
+#endif
+
 #ifndef HAVE_XLP_OUT
 #define HAVE_XLP_OUT 1
 #endif
@@ -389,6 +393,17 @@ void power_event(void) {
             if (battery_charger_input_current >= CHARGER_INPUT_CURRENT) {
                 power_peci_limit(true);
             }
+
+#if CONFIG_POWER_ON_AC
+            // Power on when the adapter is connected, so that the system
+            // returns after a power failure
+            update_power_state();
+            if (power_state == POWER_STATE_OFF) {
+                DEBUG("%02X: AC restored\n", main_cycle);
+                power_on();
+                power_wakeup_type = POWER_WAKEUP_TYPE_AC_POWER_RESTORED;
+            }
+#endif // CONFIG_POWER_ON_AC
         }
         battery_debug();
 

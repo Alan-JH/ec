@@ -64,6 +64,11 @@ endif
 # Fan configs
 include $(APP_DIR)/fan/Makefile.mk
 
+# Power on when the AC adapter is connected
+ifeq ($(CONFIG_POWER_ON_AC),y)
+CFLAGS += -DCONFIG_POWER_ON_AC=1
+endif
+
 # Set battery charging thresholds
 BATTERY_START_THRESHOLD?=90
 BATTERY_END_THRESHOLD?=100
