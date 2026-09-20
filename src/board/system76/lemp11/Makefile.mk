@@ -36,6 +36,9 @@ CONFIG_CHARGER_INPUT_CURRENT = 3420
 # Power on when the AC adapter is connected
 CONFIG_POWER_ON_AC = y
 
+# Wake on LAN via PCIE_WAKE# from the M.2 A+E slot
+CONFIG_WAKE_ON_LAN = y
+
 # Set battery charging thresholds
 BATTERY_START_THRESHOLD = 60
 BATTERY_END_THRESHOLD = 75

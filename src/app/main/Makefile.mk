@@ -69,6 +69,12 @@ ifeq ($(CONFIG_POWER_ON_AC),y)
 CFLAGS += -DCONFIG_POWER_ON_AC=1
 endif
 
+# Keep the M.2 card powered while off so that it can assert LAN_WAKEUP#.
+# Requires the board to define the LAN_WAKEUP_N GPIO.
+ifeq ($(CONFIG_WAKE_ON_LAN),y)
+CFLAGS += -DCONFIG_WAKE_ON_LAN=1
+endif
+
 # Set battery charging thresholds
 BATTERY_START_THRESHOLD?=90
 BATTERY_END_THRESHOLD?=100

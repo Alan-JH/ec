@@ -88,6 +88,10 @@
 #define CONFIG_POWER_ON_AC 0
 #endif
 
+#ifndef CONFIG_WAKE_ON_LAN
+#define CONFIG_WAKE_ON_LAN 0
+#endif
+
 #ifndef HAVE_XLP_OUT
 #define HAVE_XLP_OUT 1
 #endif
@@ -132,6 +136,15 @@ enum PowerState power_state = POWER_STATE_OFF;
 // Event that caused the system to power on.
 // Note: Must not be Reserved (0x00) or Unknown (0x02) when reported.
 enum PowerWakeupType power_wakeup_type = POWER_WAKEUP_TYPE_UNKNOWN;
+
+#if CONFIG_WAKE_ON_LAN
+// True when the EC must keep the M.2 card powered while the system is off, so
+// that it can assert LAN_WAKEUP#. Only done on AC, so that the battery is
+// never drained by a card waiting for a magic packet.
+static bool power_wol_keep_powered(void) {
+    return !gpio_get(&ACIN_N);
+}
+#endif // CONFIG_WAKE_ON_LAN
 
 enum PowerState calculate_power_state(void) {
     if (!gpio_get(&EC_RSMRST_N)) {
@@ -324,8 +337,14 @@ void power_off(void) {
 #endif // HAVE_PCH_DPWROK_EC
     tPCH14;
 
+#if CONFIG_WAKE_ON_LAN
+    // Configure WLAN GPIOs after powering off. The card is left powered when
+    // it must be able to wake the system.
+    wireless_power(power_wol_keep_powered());
+#else
     // Configure WLAN GPIOs after powering off
     wireless_power(false);
+#endif // CONFIG_WAKE_ON_LAN
 
     update_power_state();
 }
@@ -578,7 +597,13 @@ void power_event(void) {
     if (!wake_new && wake_last) {
         update_power_state();
         DEBUG("%02X: LAN_WAKEUP# asserted\n", main_cycle);
+#if CONFIG_WAKE_ON_LAN
+        // The EC only powers the card on AC, so the line is not driven
+        // otherwise and an assertion cannot be genuine
+        if ((power_state == POWER_STATE_OFF) && power_wol_keep_powered()) {
+#else
         if (power_state == POWER_STATE_OFF) {
+#endif // CONFIG_WAKE_ON_LAN
             power_on();
             power_wakeup_type = POWER_WAKEUP_TYPE_LAN_REMOTE;
         }

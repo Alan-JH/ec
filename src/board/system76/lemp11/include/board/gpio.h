@@ -18,7 +18,11 @@ extern struct Gpio __code CPU_C10_GATE_N;
 extern struct Gpio __code DD_ON;
 extern struct Gpio __code EC_EN;
 extern struct Gpio __code EC_RSMRST_N;
+#if CONFIG_WAKE_ON_LAN
+extern struct Gpio __code LAN_WAKEUP_N;
+#else
 #define HAVE_LAN_WAKEUP_N 0
+#endif
 extern struct Gpio __code LED_ACIN;
 #define HAVE_LED_AIRPLANE_N 0
 #define HAVE_LED_BAT_CHG 0
