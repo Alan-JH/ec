@@ -106,9 +106,19 @@ risk. Check one out, build, flash, test, then move to the next.
 
 Stage 0 is a year-forward jump, not a neutral baseline: the shipped EC reports
 `2025-08-11_fe9c05c`, a commit that is not on upstream master and cannot be
-fetched, so there is no way back to it. Master has ~34 commits since that date,
-including a change of the default fan algorithm to interpolation — expect the
-fan curve to behave differently even before stage 1.
+fetched. The source is gone, but the image is not — `flash_internal` dumps the
+running ROM to `./backup.rom` before writing, so the first stage 0 flash
+produced a byte-exact copy of the shipped firmware, and flashing that back is a
+full return to factory.
+
+**`backup.rom` is rewritten by every `flash_internal`, and it is
+`.gitignore`d.** Copy it out of the repo before the next flash or stage 0's
+image takes its place. The copy from the first flash is
+`~/ec-roms/factory-2025-08-11_fe9c05c.rom`, sha256 `4cc7e381…`.
+
+Master has ~34 commits since that date, including a change of the default fan
+algorithm to interpolation — expect the fan curve to behave differently even
+before stage 1.
 
 Stages are cumulative, so stage 3 is the full set. Each was built and linted
 before being committed.
@@ -136,12 +146,15 @@ booting: `make BOARD=system76/lemp11 console_internal` shows the `AC restored`
 and `LAN_WAKEUP# asserted` lines from before the boot.
 
 Rolling back: flash the previous stage's `.rom` with `flash_internal` if the
-system still boots, or with the external programmer if it does not.
+system still boots, or with the external programmer if it does not. The same
+two paths apply to `factory-2025-08-11_fe9c05c.rom` to go back to the shipped
+firmware.
 
 ## Verification status
 
 - Builds clean on SDCC 4.5.0; `check-home-segment.sh` passes.
 - `make lint` passes (reuse, uncrustify, shellcheck).
-- **No hardware testing.** Suggested order: thresholds → AC restore → WoL, with
-  an external programmer and a configured Mega 2560 on hand before flashing the
-  power-sequencing changes.
+- Stage 0 (master, built as `stage0-baseline`) flashed with `flash_internal`
+  and booted on 2026-09-20. Stages 1-3 are **untested on hardware.** Suggested
+  order: thresholds → AC restore → WoL, with an external programmer and a
+  configured Mega 2560 on hand before flashing the power-sequencing changes.
