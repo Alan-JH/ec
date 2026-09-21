@@ -27,7 +27,10 @@ up as `LAN_WAKEUP_N` activates the existing handler in `power/intel.c`.
 `power_off()` previously called `wireless_power(false)`, cutting power to the
 M.2 slot — an unpowered card cannot assert `WAKE#`. It is now left powered, but
 **only while on AC**, so a NIC waiting for a magic packet never drains the
-battery.
+battery. The AC branch of `power_event()` follows the adapter while off:
+unplugging cuts the card, and replugging powers it again. Without that, a
+shutdown on AC followed by an unplug would leave the card on the battery
+indefinitely.
 
 Because the card is unpowered on battery, the line cannot be driven
 legitimately then, so an assertion is only honored while on AC. That gate
@@ -41,7 +44,10 @@ Two hardware facts this depends on, neither verifiable from this repo:
 - the A+E slot must carry PCIe lanes **and** have its root port enabled in
   coreboot's devicetree (the board has `CNVI_DET#` on C4, implying a dual-mode
   slot, but that is not proof);
-- the slot's `PEWAKE#` must actually connect to the `PCIE_WAKE#` net on C3.
+- the slot's `PEWAKE#` must actually connect to the `PCIE_WAKE#` net on C3;
+- the slot's 3.3 V must come from a rail that `WLAN_PWR_EN` (A3) gates and
+  that survives `power_off()`. If it hangs off an S0 rail instead, keeping
+  `WLAN_PWR_EN` high does nothing once the PCH wells drop.
 
 Arm WoL in the NIC with `ethtool -s <dev> wol g` before shutting down.
 
@@ -119,7 +125,7 @@ risk. Check one out, build, flash, test, then move to the next.
 | 0 | `master` | no — baseline, keep this `ec.rom` as the rollback target |
 | 1 | `lemp11: Cap battery charge at 60-75%` | no |
 | 2 | `power: Add option to power on when AC is restored` | boot path only |
-| 3 | `lemp11: Add wake on LAN via PCIE_WAKE#` | off-state rail behaviour |
+| 3 | `lemp11: Add wake on LAN via PCIE_WAKE#` plus `power: Follow AC for the M.2 card while off` (branch tip) | off-state rail behaviour |
 
 Stage 0 is a year-forward jump, not a neutral baseline: the shipped EC reports
 `2025-08-11_fe9c05c`, a commit that is not on upstream master and cannot be

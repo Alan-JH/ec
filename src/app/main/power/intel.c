@@ -403,6 +403,15 @@ void power_event(void) {
         if (ac_new) {
             DEBUG("unplugged\n");
             battery_charger_disable();
+
+#if CONFIG_WAKE_ON_LAN
+            // Stop powering the card while off, so that it cannot drain the
+            // battery
+            update_power_state();
+            if (power_state == POWER_STATE_OFF) {
+                wireless_power(false);
+            }
+#endif // CONFIG_WAKE_ON_LAN
         } else {
             DEBUG("plugged in\n");
             battery_charger_configure();
@@ -412,6 +421,14 @@ void power_event(void) {
             if (battery_charger_input_current >= CHARGER_INPUT_CURRENT) {
                 power_peci_limit(true);
             }
+
+#if CONFIG_WAKE_ON_LAN
+            // Power the card while off, so that it can wake the system
+            update_power_state();
+            if (power_state == POWER_STATE_OFF) {
+                wireless_power(true);
+            }
+#endif // CONFIG_WAKE_ON_LAN
 
 #if CONFIG_POWER_ON_AC
             // Power on when the adapter is connected, so that the system
