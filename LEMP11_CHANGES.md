@@ -79,6 +79,23 @@ echo 60 | sudo tee /sys/class/power_supply/BAT0/charge_control_start_threshold
 echo 75 | sudo tee /sys/class/power_supply/BAT0/charge_control_end_threshold
 ```
 
+Note the consequence either way: `acpi.c:226` calls `battery_save_thresholds()`
+on *every* OS write, so as soon as anything writes those files the flash copy
+wins at each boot and editing the board Makefile has no further effect. That
+includes GNOME's battery-preservation toggle, which writes UPower's own
+unrelated 75/80 pair — leave it alone unless you want that to stick.
+
+Between the thresholds `should_charge` keeps its previous value, so the band is
+hysteresis, not a target. Plugging in at 61% or 70% does nothing at all — that
+is correct behaviour, not a failure to charge.
+
+The gauge may report nonsense at the moment of cutoff. On one 8% → 75% charge
+the indicator jumped straight to 100% and Ubuntu said "fully charged"; on a
+58% → 76% charge it correctly read `Not charging` and held. `charge_now` was
+continuous across both, and the relaxed cell voltage confirms the pack really
+is held low, so this is a reporting artifact, not a charging failure. Trust
+`voltage_now` at zero current over the percentage.
+
 ## Not implemented: scheduled boot
 
 An EC-side countdown (armed by the host, kept in battery-backed RAM, new
@@ -140,10 +157,27 @@ To disable one feature without moving off the tip, flip its switch in
 `CONFIG_WAKE_ON_LAN` each gate their whole feature, including the
 `LAN_WAKEUP_N` GPIO declaration.
 
-The EC keeps running while the system is off, and its debug ring buffer is
-plain RAM, so events that happen with the host down are still readable after
-booting: `make BOARD=system76/lemp11 console_internal` shows the `AC restored`
-and `LAN_WAKEUP# asserted` lines from before the boot.
+`console_internal` is a **live tail, not a scrollback dump.** It seeds its read
+pointer from the current head and prints only bytes written after you attach
+(`tools/system76_ectool/src/main.rs:14-33`), and the buffer is `smfi_dbg[256]`
+with index 0 holding the tail pointer (`src/app/main/smfi.c:77,492`) — 255
+bytes, about three lines. A single `battery_debug()` dump overruns it. Events
+that happened before you attached are gone.
+
+That rules out verifying stages 2 and 3 by booting and reading back what the EC
+logged while the host was down. Use `console_external` over the Mega 2560 into
+a second machine, which streams while this one is off.
+
+Run `console_internal` **without** `sudo` — the target already sudoes just the
+binary, and running make itself under sudo drops `~/.cargo/bin` from `PATH`, so
+`cargo` is not found. If the tool is already built, skip make entirely:
+
+```sh
+sudo tools/system76_ectool/target/release/system76_ectool console
+```
+
+It busy-polls with a 1 ms sleep, so do not leave it running during any
+measurement of idle power draw.
 
 Rolling back: flash the previous stage's `.rom` with `flash_internal` if the
 system still boots, or with the external programmer if it does not. The same
@@ -155,6 +189,26 @@ firmware.
 - Builds clean on SDCC 4.5.0; `check-home-segment.sh` passes.
 - `make lint` passes (reuse, uncrustify, shellcheck).
 - Stage 0 (master, built as `stage0-baseline`) flashed with `flash_internal`
-  and booted on 2026-09-20. Stages 1-3 are **untested on hardware.** Suggested
-  order: thresholds → AC restore → WoL, with an external programmer and a
-  configured Mega 2560 on hand before flashing the power-sequencing changes.
+  and booted on 2026-09-20.
+- Stage 1 (`stage1-charge-thresholds`) flashed 2026-09-20 and **confirmed on
+  hardware** overnight into 2026-09-21. Every branch of
+  `battery_charger_configure()` that these thresholds can reach was exercised:
+
+  | Observation | Branch | Result |
+  | --- | --- | --- |
+  | AC at 96% | not discriminating — the gauge's `FULLY_CHARGED` bit trips line 74 first | no charge |
+  | AC at 70%, at 61% | fall-through, hysteresis holds | no charge |
+  | AC at 58% | `charge < start_threshold` | `Charger enabled`, 3.10 A |
+  | cutoff at 76% | `charge > end_threshold` | `Not charging`, 0 A, 5793 mAh |
+  | held 7 h on AC | — | 5787 mAh, 8.216 V, 6 mAh self-discharge |
+
+  The `start_threshold == BATTERY_START_DEFAULT` branch is unreachable here,
+  since 60 is not 0.
+
+  The pack rests at 8.216 V, 4.108 V/cell against the charger's 4.4 V/cell
+  target (`ChargeVoltage 2260`), so it is genuinely held well below full. No
+  trickle and no cycling at the threshold.
+- Stages 2-3 are **untested on hardware.** Order: AC restore → WoL, with an
+  external programmer and a configured Mega 2560 on hand before flashing
+  either, and `console_external` set up to capture events while the host is
+  off.
