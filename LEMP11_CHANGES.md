@@ -208,7 +208,8 @@ firmware.
   The pack rests at 8.216 V, 4.108 V/cell against the charger's 4.4 V/cell
   target (`ChargeVoltage 2260`), so it is genuinely held well below full. No
   trickle and no cycling at the threshold.
-- Stages 2-3 are **untested on hardware.** Order: AC restore → WoL, with an
-  external programmer and a configured Mega 2560 on hand before flashing
-  either, and `console_external` set up to capture events while the host is
-  off.
+- Stage 2 (`stage2-ac-restore`) flashed 2026-09-21 with `flash_internal`;
+  **confirmed on hardware** — connecting AC while off boots the machine.
+- Stage 3 is **untested on hardware.** Have an external programmer and a
+  configured Mega 2560 on hand before flashing it, and `console_external` set
+  up to capture events while the host is off.
