@@ -36,8 +36,10 @@ CONFIG_CHARGER_INPUT_CURRENT = 3420
 # Power on when the AC adapter is connected
 CONFIG_POWER_ON_AC = y
 
-# Wake on LAN via PCIE_WAKE# from the M.2 A+E slot
-CONFIG_WAKE_ON_LAN = y
+# Wake on LAN via PCIE_WAKE# (C3). Off: on this board the M.2 A+E slot's
+# PEWAKE# does not reach C3, and C3 reads low once power_off() runs, so the
+# system powers straight back on while off on AC. See LEMP11_CHANGES.md.
+CONFIG_WAKE_ON_LAN = n
 
 # Set battery charging thresholds
 BATTERY_START_THRESHOLD = 60

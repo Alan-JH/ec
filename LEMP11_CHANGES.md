@@ -6,13 +6,22 @@ SPDX-FileCopyrightText: NONE
 # lemp11 local modifications
 
 Three out-of-tree changes to `system76/lemp11`, for a machine with the M.2 A+E
-WiFi card replaced by an Intel I226-V 2.5G NIC on an A+E adapter.
+WiFi card replaced by an Intel I226-V 2.5G NIC on an A+E adapter. Wake on LAN
+(section 1) failed on hardware and is switched off; the other two are in use.
+The NIC itself, including the adapter mod it needs, is covered in
+`LEMP11_TRUENAS.md`.
 
 Build: `make BOARD=system76/lemp11` → `build/ec.rom`.
 Flash: `make BOARD=system76/lemp11 flash_internal` (powers the system off
 immediately; `CONFIG_SECURITY` is not set on this board, so no unlock needed).
 
-## 1. Wake on LAN
+## 1. Wake on LAN — shelved, `CONFIG_WAKE_ON_LAN = n`
+
+**This does not work on this board, and the switch is off.** The code stays so
+that it can be revisited after a hardware mod. With it off, the branch tip
+builds a ROM byte-identical to stage 2 (checked with
+`VERSION=stage2-ac-restore`). What went wrong is under
+[Stage 3 results](#stage-3-results); the original design follows.
 
 `PCIE_WAKE#` reaches the EC on GPIO C3 but was declared and unused. Wiring it
 up as `LAN_WAKEUP_N` activates the existing handler in `power/intel.c`.
@@ -39,17 +48,50 @@ system76/ec's unmerged `darp10-wol` branch removes it on the boards that have
 it. Boards that do not set `CONFIG_WAKE_ON_LAN` build byte-identical firmware
 (verified against upstream for darp10, lemp12, serw13, gaze20 and oryp12).
 
-Two hardware facts this depends on, neither verifiable from this repo:
+The hardware facts this depended on, as tested:
 
-- the A+E slot must carry PCIe lanes **and** have its root port enabled in
-  coreboot's devicetree (the board has `CNVI_DET#` on C4, implying a dual-mode
-  slot, but that is not proof);
-- the slot's `PEWAKE#` must actually connect to the `PCIE_WAKE#` net on C3;
-- the slot's 3.3 V must come from a rail that `WLAN_PWR_EN` (A3) gates and
-  that survives `power_off()`. If it hangs off an S0 rail instead, keeping
-  `WLAN_PWR_EN` high does nothing once the PCH wells drop.
+- the A+E slot carries PCIe and its root port is enabled — **true** (PCH RP#5,
+  `00:1c.0`; coreboot's `.clk_req = 2` also needed an adapter mod);
+- the slot's `PEWAKE#` connects to the `PCIE_WAKE#` net on C3 — **false**;
+- `PCIE_WAKE#` stays high while the system is off — **false**;
+- the slot's 3.3 V survives `power_off()` when `WLAN_PWR_EN` is kept high —
+  **true** (the card's RJ45 link LED stays lit while off on AC).
 
-Arm WoL in the NIC with `ethtool -s <dev> wol g` before shutting down.
+### Stage 3 results
+
+Flashed 2026-09-21 with the I226 installed. On AC, every shutdown was followed
+by a boot about 12 s later, the time it takes to reach `power_off()`.
+
+| Test | Result |
+| --- | --- |
+| shutdown on AC, `wol g` or `wol d` | boots again after ~12 s |
+| shutdown on battery, `wol g` or `wol d` | stays off |
+| rebuilt with `CONFIG_POWER_ON_AC=n`, shutdown on AC | boots again, so not stage 2 |
+| internal pull-up on C3 (`GPIO_IN \| GPIO_UP`) | no change |
+| card removed, shutdown on AC | boots again, so not the card |
+| slot pin 55 grounded through 1 kΩ, host on, `console_internal` running | no `LAN_WAKEUP#` message |
+| same, watching `GPP_D13` (`WLAN_WAKEUP#`, pinctrl pin 112) | no change |
+| control: slot pin 53 grounded, watching `SRCCLKREQB_2` (pin 106) | `0x44000702` → `0x44000700` |
+
+Two independent faults:
+
+1. **C3 falls once the system is off.** Its board pull up does not survive
+   `power_off()` and wins against the EC's internal pull up. On AC the wake
+   handler takes that as `LAN_WAKEUP#` and boots. This alone makes stage 3
+   unusable: the machine cannot stay off on AC.
+2. **The slot's `PEWAKE#` reaches neither C3 nor the PCH's `GPP_D13`.** Given
+   the control, it is most likely not connected on this board, which fits a
+   slot built for a CNVi card. So even a fixed C3 would never see a magic
+   packet, and there is no firmware-only route, EC or coreboot.
+
+The only remaining route is hardware: cut the adapter's finger-55 trace and
+wire the I226's `PE_WAKE_N` to an unconnected EC input (`GPA4` and `GPA5` are
+marked not connected in `gpio.c`), with its own pull up from the card's 3.3 V,
+then point `LAN_WAKEUP_N` at that pin. That means soldering to a 0.4 mm pitch
+LQFP with no external EC programmer for recovery, so it has not been tried.
+
+For remote power-on, stage 2 is enough: put the adapter on a smart plug and
+switch it off and on.
 
 ## 2. Power on when AC is restored
 
@@ -60,11 +102,13 @@ Arm WoL in the NIC with `ethtool -s <dev> wol g` before shutting down.
 
 Behaviour worth knowing:
 
-- a normal shutdown with AC already attached produces no edge, so it does not
-  fight you;
+- a normal shutdown with AC already attached produces no edge, so it should
+  not fight you (not yet checked on hardware with stage 2 alone);
 - unplugging and replugging AC while off **will** boot the machine;
 - if the EC cold-boots because AC arrived on a dead battery, the machine boots —
-  the intended outage-recovery case.
+  the intended outage-recovery case (not tested);
+- flashing stage 2 over stage 3 with AC attached left the machine off. The
+  stage 3 builds did boot after their flashes, but that was C3, not an AC edge.
 
 ## 3. Charge thresholds 60–75%
 
@@ -125,7 +169,10 @@ risk. Check one out, build, flash, test, then move to the next.
 | 0 | `master` | no — baseline, keep this `ec.rom` as the rollback target |
 | 1 | `lemp11: Cap battery charge at 60-75%` | no |
 | 2 | `power: Add option to power on when AC is restored` | boot path only |
-| 3 | `lemp11: Add wake on LAN via PCIE_WAKE#` plus `power: Follow AC for the M.2 card while off` (branch tip) | off-state rail behaviour |
+| 3 | `lemp11: Add wake on LAN via PCIE_WAKE#` plus `power: Follow AC for the M.2 card while off` | off-state rail behaviour; **failed, see section 1** |
+
+The branch tip has `CONFIG_WAKE_ON_LAN = n`, so it builds stage 2. That is the
+image to run.
 
 Stage 0 is a year-forward jump, not a neutral baseline: the shipped EC reports
 `2025-08-11_fe9c05c`, a commit that is not on upstream master and cannot be
@@ -143,7 +190,7 @@ Master has ~34 commits since that date, including a change of the default fan
 algorithm to interpolation — expect the fan curve to behave differently even
 before stage 1.
 
-Stages are cumulative, so stage 3 is the full set. Each was built and linted
+Stages are cumulative, so stage 3 is the full set, but only stage 2 is in use. Each was built and linted
 before being committed.
 
 ```sh
@@ -216,6 +263,8 @@ firmware.
   trickle and no cycling at the threshold.
 - Stage 2 (`stage2-ac-restore`) flashed 2026-09-21 with `flash_internal`;
   **confirmed on hardware** — connecting AC while off boots the machine.
-- Stage 3 is **untested on hardware.** Have an external programmer and a
-  configured Mega 2560 on hand before flashing it, and `console_external` set
-  up to capture events while the host is off.
+- Stage 3 (`stage3-wol`, and test builds `stage3-wol-pullup` and
+  `stage3-no-acrestore`) flashed 2026-09-21 and **failed on hardware**. See
+  [Stage 3 results](#stage-3-results). Stage 2 was flashed back the same day.
+  The branch tip with `CONFIG_WAKE_ON_LAN = n` builds a ROM byte-identical to
+  `~/ec-roms/stage2-ac-restore.rom`.

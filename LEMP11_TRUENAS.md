@@ -5,9 +5,10 @@ SPDX-FileCopyrightText: NONE
 
 # lemp11 I226-V NIC under TrueNAS
 
-What TrueNAS needs to use the Intel I226-V in the M.2 A+E slot, and to wake the
-machine with it. This covers the Linux-based TrueNAS (Community Edition,
-formerly SCALE). The EC side is described in `LEMP11_CHANGES.md`.
+What TrueNAS needs to use the Intel I226-V in the M.2 A+E slot, and how to
+power the machine on remotely without wake on LAN. This covers the Linux-based
+TrueNAS (Community Edition, formerly SCALE). The EC side is described in
+`LEMP11_CHANGES.md`.
 
 ## Hardware state this assumes
 
@@ -20,13 +21,14 @@ formerly SCALE). The EC side is described in `LEMP11_CHANGES.md`.
   (`pch_pcie_rp[PCH_RP(5)]`, `.clk_req = 2`), so the card never got a clock
   and was invisible (`PresDet-`). Finger 53 is now wired to ground, which
   keeps the clock running.
-- **PEWAKE#:** finger 55 has a trace to the I226, so the card can drive the
-  `PCIE_WAKE#` net that the EC reads on C3.
 - **PERST#:** finger 52 (bottom side) is routed to the I226 through a 0 Ω
-  resistor, so the card sees the host's reset and can enter its off-state
-  wake mode ("Dr" in Intel's I210/I225 datasheets). A nearby unpopulated
-  footprint looks like a pull-down to ground. Leave it empty: fitted, it would
-  hold the card in reset. Keep solder from the finger-53 mod away from it.
+  resistor. A nearby unpopulated footprint looks like a pull-down to ground.
+  Leave it empty: fitted, it would hold the card in reset. Keep solder from
+  the finger-53 mod away from it.
+- **PEWAKE#:** finger 55 has a trace to the I226, but on the laptop side the
+  slot's pin 55 reaches neither the EC (C3) nor the PCH (`GPP_D13`). The card
+  has no way to wake the system, so wake on LAN is not available. See
+  `LEMP11_CHANGES.md`, section 1.
 
 | Item | Value |
 | --- | --- |
@@ -39,37 +41,34 @@ formerly SCALE). The EC side is described in `LEMP11_CHANGES.md`.
 
 ## The problem TrueNAS has to work around
 
-The link trains **after** the kernel's boot-time PCI scan. The kernel logs:
+Right after the CLKREQ# mod, the link trained **after** the kernel's boot-time
+PCI scan. The kernel logged:
 
 ```
 pci 0000:00:1c.0: broken device, retraining non-functional downstream link at 2.5GT/s
 pci 0000:00:1c.0: retraining failed
 ```
 
-and the NIC is missing until something rescans. The port has no hotplug
+and the NIC was missing until something rescanned. The port has no hotplug
 (no `pciehp` on `1c.0`), so nothing does that on its own. After a manual
-retrain and rescan the link comes up at 5 GT/s and `igc` binds normally. A few
+retrain and rescan the link came up at 5 GT/s and `igc` bound normally. A few
 correctable `RxErr` messages during training are expected and stop once the
 link is up.
 
-Two consequences:
-
-1. **No NIC after boot** until a rescan runs.
-2. **Wake on LAN is not armed on that boot.** `igc` writes the wake filters
-   into the card at shutdown only if WoL was enabled while it was bound. On a
-   boot where the NIC did not enumerate, the card sits powered but unarmed and
-   a magic packet does nothing.
+After the card was reseated, it enumerated at boot on every later boot, with no
+retrain messages. The cause of the earlier failures is not known, so keep the
+boot command below as insurance: it does nothing when the NIC is already there.
 
 The empty port also runtime-suspends to D3cold, which drives `WLAN_RST#`
-(`GPP_B17`) low. Given how unreliably this link trains, keep both the port and
-the NIC out of runtime suspend so a resume never has to retrain it.
+(`GPP_B17`) low. Given how unreliably this link has trained, keep both the port
+and the NIC out of runtime suspend so a resume never has to retrain it.
 
 ## What to configure
 
 TrueNAS is an appliance: packages or files added to the boot pool by hand are
-unsupported and are lost on update. `igc`, `setpci` (pciutils) and `ethtool`
-are all in the base image, so the only thing to add is a boot-time command,
-stored in the TrueNAS config database so it survives updates.
+unsupported and are lost on update. `igc` and `setpci` (pciutils) are in the
+base image, so the only thing to add is a boot-time command, stored in the
+TrueNAS config database so it survives updates.
 
 **System → Advanced Settings → Init/Shutdown Scripts → Add**
 
@@ -80,7 +79,7 @@ stored in the TrueNAS config database so it survives updates.
 - Command:
 
 ```sh
-sh -c 'D=/sys/bus/pci/devices; echo on > $D/0000:00:1c.0/power/control; for i in 1 2 3 4 5; do [ -e $D/0000:2d:00.0 ] && break; setpci -s 00:1c.0 CAP_EXP+10.w=0020:0020; sleep 1; echo 1 > /sys/bus/pci/rescan; done; [ -e $D/0000:2d:00.0 ] || { logger -t lemp11-nic "I226 did not enumerate"; exit 1; }; echo on > $D/0000:2d:00.0/power/control; for i in 1 2 3 4 5; do [ -e /sys/class/net/enp45s0 ] && break; sleep 1; done; ethtool -s enp45s0 wol g'
+sh -c 'D=/sys/bus/pci/devices; echo on > $D/0000:00:1c.0/power/control; for i in 1 2 3 4 5; do [ -e $D/0000:2d:00.0 ] && break; setpci -s 00:1c.0 CAP_EXP+10.w=0020:0020; sleep 1; echo 1 > /sys/bus/pci/rescan; done; [ -e $D/0000:2d:00.0 ] || { logger -t lemp11-nic "I226 did not enumerate"; exit 1; }; echo on > $D/0000:2d:00.0/power/control'
 ```
 
 It does the same steps you would by hand:
@@ -90,34 +89,33 @@ It does the same steps you would by hand:
    times, until `2d:00.0` appears. If it never does, log `I226 did not
    enumerate` to syslog.
 3. Keep the NIC out of runtime suspend.
-4. Wait for `enp45s0`, then arm WoL for magic packets. This has to run on
-   every boot, because the setting does not survive a power cycle.
-
-If `enp45s0` turns out to have a different name on TrueNAS, change it in the
-command.
 
 ## Installing
 
 1. Install TrueNAS as usual. The installer does not need the I226.
-2. On first boot the I226 is missing. Use the USB-C dongle, which the stock
+2. If the I226 is missing on first boot, use the USB-C dongle, which the stock
    kernel supports, or the local console to reach the web UI.
 3. Add the Init command above, and reboot.
 4. Check that `enp45s0` is present and configure it under **Network**. Once
    it works, the dongle can be removed.
 
-## Wake on LAN
+## Remote power-on
 
-Everything needed while the machine is off is handled by the EC (stage 3 in
-`LEMP11_CHANGES.md`). TrueNAS only has to arm the card, which the Init command
-does.
+Wake on LAN is not possible on this board (see the PEWAKE# note above). Use
+stage 2 of the EC changes instead, which boots the machine when AC arrives
+while it is off:
 
-- **AC only.** Stage 3 keeps the slot powered while off only while the adapter
-  is connected, and ignores `PCIE_WAKE#` on battery. Unplugging AC while off
-  cuts the card, and replugging powers it again.
-- **Sending the packet:** from another machine on the same L2 segment, run
-  `wakeonlan c4:62:37:0f:aa:22` or `etherwake -i <if> c4:62:37:0f:aa:22`.
-- Stage 2 (power on when AC is restored) suits a NAS: after an outage the
-  machine boots once power returns.
+- Put the laptop's adapter on a smart plug. To power the NAS on remotely,
+  switch the plug off, then on again.
+- The same behaviour brings the machine back after a power outage.
+- A shutdown with AC attached should leave the machine off: there is no AC
+  edge. After flashing stage 2 on AC the machine did stay off, but a normal OS
+  shutdown on AC under stage 2 has not been checked yet. Try it once before
+  relying on it.
+
+Wake from suspend (`s2idle`) might still work, since it can use an in-band PCIe
+PME instead of the missing wake pin. It is untested, and TrueNAS does not
+support suspend, so it is not pursued here.
 
 ## Verifying on TrueNAS
 
@@ -126,14 +124,8 @@ From the TrueNAS shell, after a reboot:
 ```sh
 lspci -nnk -s 2d:00.0                                  # I226-V, driver igc
 cat /sys/bus/pci/devices/0000:2d:00.0/current_link_speed   # 5.0 GT/s PCIe
-ethtool enp45s0 | grep -i wake                          # Wake-on: g
 journalctl -b -t lemp11-nic                             # empty if it enumerated
 ```
-
-Then test a full cycle: shut down on AC, send a magic packet, and confirm it
-boots. To see what the EC does while the host is off, use `console_external`
-through the Mega 2560. `console_internal` cannot show events that happened
-before you attached.
 
 ## Troubleshooting
 

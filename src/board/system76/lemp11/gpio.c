@@ -16,7 +16,7 @@ struct Gpio __code DD_ON =          GPIO(E, 4);
 struct Gpio __code EC_EN =          GPIO(B, 6); // renamed to SUSBC_EC#
 struct Gpio __code EC_RSMRST_N =    GPIO(E, 5);
 #if CONFIG_WAKE_ON_LAN
-struct Gpio __code LAN_WAKEUP_N =   GPIO(C, 3); // PCIE_WAKE#, M.2 A+E slot
+struct Gpio __code LAN_WAKEUP_N =   GPIO(C, 3); // PCIE_WAKE#
 #endif
 struct Gpio __code LED_ACIN =       GPIO(C, 7);
 struct Gpio __code LED_PWR =        GPIO(D, 0);
