@@ -11,7 +11,10 @@ formerly SCALE). The EC side is described in `LEMP11_CHANGES.md`.
 
 ## Hardware state this assumes
 
-- **Adapter:** UEEGO M.2 A+E to I226-V (Amazon B0G4J54K18), in J_WLAN1.
+- **Adapter:** UEEGO M.2 A+E to I226-V (Amazon B0G4J54K18), in J_WLAN1. The
+  I226 sits on the M.2 card itself, so the PCIe path is just slot to chip. The
+  20 cm cable carries only the Ethernet pairs to a second board with the
+  magnetics and RJ45.
 - **CLKREQ# mod:** the adapter leaves finger 53 (CLKREQ0#) as a bare pad.
   lemp11's coreboot gates the slot's reference clock on CLKREQ#
   (`pch_pcie_rp[PCH_RP(5)]`, `.clk_req = 2`), so the card never got a clock
@@ -19,11 +22,11 @@ formerly SCALE). The EC side is described in `LEMP11_CHANGES.md`.
   keeps the clock running.
 - **PEWAKE#:** finger 55 has a trace to the I226, so the card can drive the
   `PCIE_WAKE#` net that the EC reads on C3.
-- **PERST#:** finger 52 (bottom side) has not been checked. If it is not
-  routed, that may explain the late link described below. It may also matter
-  for WoL: Intel's I210/I225 datasheets enter the off-state wake mode ("Dr")
-  when PERST# is asserted. Test WoL before wiring it; if the EC never sees C3
-  go low, this is the first suspect.
+- **PERST#:** finger 52 (bottom side) is routed to the I226 through a 0 Ω
+  resistor, so the card sees the host's reset and can enter its off-state
+  wake mode ("Dr" in Intel's I210/I225 datasheets). A nearby unpopulated
+  footprint looks like a pull-down to ground. Leave it empty: fitted, it would
+  hold the card in reset. Keep solder from the finger-53 mod away from it.
 
 | Item | Value |
 | --- | --- |
@@ -144,8 +147,10 @@ before you attached.
   TrueNAS middleware internal, so check that it exists on your release first.
 - **Link drops or flaps.** Check the finger-53 wire first, since it sits next to
   REFCLK− on pin 49. Pins 47 and 49 must not read near 0 Ω to ground. If the
-  link itself is stable but it renegotiates, try `ethtool --set-eee enp45s0 eee off`,
+  PCIe link is stable but the Ethernet link renegotiates, check the cable to
+  the RJ45 board, then try `ethtool --set-eee enp45s0 eee off`,
   a common I225/I226 workaround.
 - **Never enumerates** (`I226 did not enumerate` in the journal). Check the
-  adapter's seating and the 20 cm cable, then check whether finger 52 (PERST0#)
-  is routed.
+  seating of the M.2 card and the finger-53 wire, and check that nothing
+  bridges the unpopulated PERST# pull-down footprint. The 20 cm cable carries
+  only Ethernet, so it cannot affect enumeration.
