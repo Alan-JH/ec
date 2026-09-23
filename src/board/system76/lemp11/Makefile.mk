@@ -51,7 +51,12 @@ CONFIG_POWER_LIMIT_DC = 45
 
 # Fan configs
 CONFIG_FAN1_PWM = DCR2
+# The first two points are a floor for running outside the chassis, where
+# nothing else moves air over the board or the drives. Stock starts at 70 C,
+# leaving the fan off below that (fan_duty() returns 0% below the first point).
 CONFIG_FAN1_POINTS = " \
+	FAN_POINT(0, 20), \
+	FAN_POINT(50, 20), \
 	FAN_POINT(70, 40), \
 	FAN_POINT(75, 50), \
 	FAN_POINT(80, 60), \

@@ -151,6 +151,11 @@ Two things to set up in software:
    after any power loss, and expect anything time-sensitive, such as
    certificates or replication, to complain until the clock is set.
 
+The EC's fan curve now has a floor so that the board and the drives always get
+some airflow (`LEMP11_CHANGES.md` section 4). Watch drive temperatures with
+`smartctl -A /dev/sdX` under load, since the EC only sees the CPU and knows
+nothing about the drives.
+
 Also worth knowing without a keyboard attached:
 
 - Fn+Esc, which resets the EC config including the charge thresholds, is not

@@ -5,9 +5,10 @@ SPDX-FileCopyrightText: NONE
 
 # lemp11 local modifications
 
-Three out-of-tree changes to `system76/lemp11`, for a machine with the M.2 A+E
-WiFi card replaced by an Intel I226-V 2.5G NIC on an A+E adapter. Wake on LAN
-(section 1) failed on hardware and is switched off; the other two are in use.
+Four out-of-tree changes to `system76/lemp11`, for a machine with the M.2 A+E
+WiFi card replaced by an Intel I226-V 2.5G NIC on an A+E adapter, running as a
+headless NAS outside its chassis. Wake on LAN (section 1) failed on hardware
+and is switched off; the other three are in use.
 The NIC itself, including the adapter mod it needs, is covered in
 `LEMP11_TRUENAS.md`.
 
@@ -146,6 +147,39 @@ continuous across both, and the relaxed cell voltage confirms the pack really
 is held low, so this is a reporting artifact, not a charging failure. Trust
 `voltage_now` at zero current over the percentage.
 
+## 4. Fan floor for running outside the chassis
+
+`src/board/system76/lemp11/Makefile.mk`, `CONFIG_FAN1_POINTS`: two points added
+below the stock curve.
+
+```
+FAN_POINT(0, 20), FAN_POINT(50, 20),   # added
+FAN_POINT(70, 40), ... (stock from here)
+```
+
+`fan_duty()` returns 0% for any temperature below the first point
+(`src/app/main/fan/interp.c`), so the stock curve, which starts at 70 °C, left
+the fan **off** below that. In the chassis that was fine. On a bare board with
+drives beside it, nothing else moves air, so an idle NAS sat with no airflow at
+all. The pair of points holds 20% up to 50 °C and then ramps to the stock 40%
+at 70 °C, so nothing above 70 °C changes.
+
+The fan only runs in S0: `fan_get_duty()` returns 0 in any other power state,
+so this does not add idle draw while the machine is off.
+
+**Check that 20% actually spins this fan before relying on it.** Duties that
+are too low can stall it or make it whine. `fan_pwm` takes a raw 0–255 value,
+where 20% is 51:
+
+```sh
+sudo tools/system76_ectool/target/release/system76_ectool fan_pwm 1 51
+sudo tools/system76_ectool/target/release/system76_ectool fan_rpm 1
+```
+
+A non-zero, steady RPM means 20% is usable; raise the two points if it is not.
+`fan_pwm` takes the fan out of EC control until the next power cycle, so reboot
+afterwards, and remember fans are numbered from 1.
+
 ## Not implemented: scheduled boot
 
 An EC-side countdown (armed by the host, kept in battery-backed RAM, new
@@ -170,6 +204,7 @@ risk. Check one out, build, flash, test, then move to the next.
 | 1 | `lemp11: Cap battery charge at 60-75%` | no |
 | 2 | `power: Add option to power on when AC is restored` | boot path only |
 | 3 | `lemp11: Add wake on LAN via PCIE_WAKE#` plus `power: Follow AC for the M.2 card while off` | off-state rail behaviour; **failed, see section 1** |
+| 4 | `lemp11: Add a fan floor for running outside the chassis` | no — fan curve data only |
 
 The branch tip has `CONFIG_WAKE_ON_LAN = n`, so it builds stage 2. That is the
 image to run.
@@ -275,3 +310,5 @@ firmware.
   [Stage 3 results](#stage-3-results). Stage 2 was flashed back the same day.
   The branch tip with `CONFIG_WAKE_ON_LAN = n` builds a ROM byte-identical to
   `~/ec-roms/stage2-ac-restore.rom`.
+- Stage 4 (`stage4-fan-floor`) builds and lints, and is **not yet flashed.**
+  Confirm the fan spins at 20% first, as section 4 describes.
