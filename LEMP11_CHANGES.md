@@ -7,8 +7,9 @@ SPDX-FileCopyrightText: NONE
 
 Five out-of-tree changes to `system76/lemp11`, for a machine with the M.2 A+E
 WiFi card replaced by an Intel I226-V 2.5G NIC on an A+E adapter, running as a
-headless NAS outside its chassis. Wake on LAN (section 1) failed on hardware
-and is switched off; the other four are in use.
+headless NAS outside its chassis. Wake on LAN (section 1) and USB power on AC
+(section 5) failed on hardware and are switched off; the other three are in
+use.
 The NIC itself, including the adapter mod it needs, is covered in
 `LEMP11_TRUENAS.md`.
 
@@ -193,10 +194,32 @@ and 51 (20%) once the temperature falls below 50 °C. **If `fan1_input` is 0
 while `pwm1` is 51, the fan stalls at 20%** and the two points should move to
 25 or 30%.
 
-## 5. USB power follows the adapter
+## 5. USB power follows the adapter — shelved, `CONFIG_USB_CHARGE_ON_AC = n`
 
-`CONFIG_USB_CHARGE_ON_AC`, so that a JetKVM or similar can stay powered while
-the machine is off, without touching the battery.
+**This does not work on this board, and the switch is off.** Flashed
+2026-09-22 as `stage5-usb-charge`: with AC connected and the system shut down,
+**none of the three ports stayed powered.** Almost certainly the port's 5 V rail
+does not survive `power_off()`, which drops the PCH wells — the same wall that
+stopped wake on LAN. A GPIO cannot bring back a rail that is gone. It is also
+possible that GPF1 does not control port power on this board at all, or is
+active low; neither can be told apart without a schematic, and neither is worth
+chasing, since the rail is the more likely cause.
+
+The code stays, gated off, in case a schematic ever shows otherwise.
+
+**What to do instead:** give the KVM its own USB power supply on the same smart
+plug as the laptop's adapter. It is then powered exactly when AC is present,
+with no firmware involved and no drain on the pack.
+
+The one rail known to survive `power_off()` under EC control is the M.2 slot's
+3.3 V, which `WLAN_PWR_EN` gates: during the stage 3 tests the NIC's RJ45 link
+LED stayed lit while the system was off on AC. Powering a 5 V accessory from it
+would need a boost converter wired to the adapter's 3.3 V, plus a new option to
+keep the slot powered while off without the C3 wake handler, since that
+behaviour currently lives in the shelved wake on LAN commit. Not worth it
+against a USB brick on the smart plug.
+
+The original design follows.
 
 | File | Change |
 | --- | --- |
@@ -216,21 +239,13 @@ connected in any power state, low the moment it is unplugged. So a KVM stays up
 across a shutdown, and an outage cuts it instead of draining the pack. Boards
 that do not set the option build byte-identical firmware (checked for lemp12).
 
-**Three things to confirm on hardware, none of them knowable from this repo:**
+Tested by plugging a USB light into each port and shutting down with AC
+connected. Nothing stayed powered, on any of the three ports.
 
-- **which port** GPF1 controls — likely one USB-A port, possibly the one marked
-  with a lightning bolt;
-- **whether the rail behind it survives `power_off()`.** If that rail drops with
-  the PCH wells, the GPIO cannot help and this change is useless;
-- **that the ports still behave normally while the machine is running.**
-
-Test by plugging a phone or a USB light into each port, shutting down with AC
-connected, and then unplugging AC. The light should stay on across the
-shutdown and go out when the adapter is removed.
-
-If the JetKVM is powered this way, remember it dies during an outage while the
-NAS keeps running on the battery, so remote console is gone exactly when the
-machine is running unattended. A power bank with pass-through avoids that.
+Note also that a KVM powered from this machine dies during an outage while the
+NAS keeps running on the battery, so remote console would be gone exactly when
+the machine is unattended. A power bank with pass-through, or its own supply,
+avoids that.
 
 ## Not implemented: scheduled boot
 
@@ -257,7 +272,7 @@ risk. Check one out, build, flash, test, then move to the next.
 | 2 | `power: Add option to power on when AC is restored` | boot path only |
 | 3 | `lemp11: Add wake on LAN via PCIE_WAKE#` plus `power: Follow AC for the M.2 card while off` | off-state rail behaviour; **failed, see section 1** |
 | 4 | `lemp11: Add a fan floor for running outside the chassis` | no — fan curve data only |
-| 5 | `lemp11: Follow the adapter for USB port power` | no — one GPIO, off the power path |
+| 5 | `lemp11: Follow the adapter for USB port power` | no — one GPIO, off the power path; **failed, see section 5** |
 
 The branch tip has `CONFIG_WAKE_ON_LAN = n`, so it builds stage 2. That is the
 image to run.
@@ -363,8 +378,17 @@ firmware.
   [Stage 3 results](#stage-3-results). Stage 2 was flashed back the same day.
   The branch tip with `CONFIG_WAKE_ON_LAN = n` builds a ROM byte-identical to
   `~/ec-roms/stage2-ac-restore.rom`.
-- Stage 4 (`stage4-fan-floor`) builds and lints, and is **not yet flashed.**
-  Confirm the fan spins at 20% first, as section 4 describes.
-- Stage 5 (`stage5-usb-charge`) builds and lints, and is **not yet flashed.**
-  It is a separate commit from stage 4 so that either can be reverted on its
-  own. Section 5 lists what to check once it is on.
+- Stage 4 (`stage4-fan-floor`) flashed 2026-09-22 and **confirmed on
+  hardware**, with a larger effect than expected:
+
+  | | Stock curve | Fan floor |
+  | --- | --- | --- |
+  | `temp1_input` | 67 °C | **50 °C** |
+  | `pwm1` | 0 | 51 (20%) |
+  | `fan1_input` | 0 | **1351 RPM** |
+
+  So 20% spins this fan reliably, and idle runs 17 °C cooler. The stock curve
+  was letting the board sit at 67 °C with no airflow at all.
+- Stage 5 (`stage5-usb-charge`) flashed 2026-09-22 and **failed on hardware.**
+  See section 5. `CONFIG_USB_CHARGE_ON_AC` is now `n`, which makes the tip build
+  the stage 4 image again.

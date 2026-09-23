@@ -41,9 +41,10 @@ CONFIG_POWER_ON_AC = y
 # system powers straight back on while off on AC. See LEMP11_CHANGES.md.
 CONFIG_WAKE_ON_LAN = n
 
-# Power USB ports whenever the adapter is connected, including while off, so
-# that a JetKVM can stay up without draining the pack. USB_CHARGE_EN is GPF1.
-CONFIG_USB_CHARGE_ON_AC = y
+# Power USB ports whenever the adapter is connected, including while off.
+# Off: driving USB_CHARGE_EN (GPF1) did not keep any port powered after
+# power_off(). See LEMP11_CHANGES.md section 5.
+CONFIG_USB_CHARGE_ON_AC = n
 
 # Set battery charging thresholds
 BATTERY_START_THRESHOLD = 60

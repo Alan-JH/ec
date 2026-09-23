@@ -152,9 +152,14 @@ Two things to set up in software:
    certificates or replication, to complain until the clock is set.
 
 The EC's fan curve now has a floor so that the board and the drives always get
-some airflow (`LEMP11_CHANGES.md` section 4). Watch drive temperatures with
-`smartctl -A /dev/sdX` under load, since the EC only sees the CPU and knows
-nothing about the drives.
+some airflow (`LEMP11_CHANGES.md` section 4). It took idle from 67 °C to 50 °C
+on the bare board. Watch drive temperatures with `smartctl -A /dev/sdX` under
+load, since the EC only sees the CPU and knows nothing about the drives.
+
+Powering an accessory such as a JetKVM from the machine's own USB ports does
+not work: no port stays powered once the system is off, whatever the EC does
+(`LEMP11_CHANGES.md` section 5). Give such a device its own USB supply on the
+same smart plug as the laptop's adapter.
 
 Also worth knowing without a keyboard attached:
 
