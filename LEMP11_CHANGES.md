@@ -102,8 +102,8 @@ switch it off and on.
 
 Behaviour worth knowing:
 
-- a normal shutdown with AC already attached produces no edge, so it should
-  not fight you (not yet checked on hardware with stage 2 alone);
+- a normal shutdown with AC already attached produces no edge, so it does not
+  fight you (confirmed 2026-09-22: off for 100 s on AC, no wake);
 - unplugging and replugging AC while off **will** boot the machine;
 - if the EC cold-boots because AC arrived on a dead battery, the machine boots —
   the intended outage-recovery case (not tested);
@@ -262,7 +262,14 @@ firmware.
   target (`ChargeVoltage 2260`), so it is genuinely held well below full. No
   trickle and no cycling at the threshold.
 - Stage 2 (`stage2-ac-restore`) flashed 2026-09-21 with `flash_internal`;
-  **confirmed on hardware** — connecting AC while off boots the machine.
+  **confirmed on hardware** — connecting AC while off boots the machine. All
+  three cases were re-checked on 2026-09-22, on the bare board:
+
+  | Test | Result |
+  | --- | --- |
+  | shutdown on AC | stayed off 100 s, until AC was unplugged and the power switch pressed |
+  | power switch on battery | boots |
+  | shutdown on battery, then AC plugged in | stayed off 71 s, then AC booted it |
 - Stage 3 (`stage3-wol`, and test builds `stage3-wol-pullup` and
   `stage3-no-acrestore`) flashed 2026-09-21 and **failed on hardware**. See
   [Stage 3 results](#stage-3-results). Stage 2 was flashed back the same day.

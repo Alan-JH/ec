@@ -108,10 +108,9 @@ while it is off:
 - Put the laptop's adapter on a smart plug. To power the NAS on remotely,
   switch the plug off, then on again.
 - The same behaviour brings the machine back after a power outage.
-- A shutdown with AC attached should leave the machine off: there is no AC
-  edge. After flashing stage 2 on AC the machine did stay off, but a normal OS
-  shutdown on AC under stage 2 has not been checked yet. Try it once before
-  relying on it.
+- A shutdown with AC attached leaves the machine off, since there is no AC
+  edge. Confirmed on 2026-09-22, so shutting down from the TrueNAS UI works as
+  expected.
 
 Wake from suspend (`s2idle`) might still work, since it can use an in-band PCIe
 PME instead of the missing wake pin. It is untested, and TrueNAS does not
