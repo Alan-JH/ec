@@ -36,7 +36,6 @@ TrueNAS (Community Edition, formerly SCALE). The EC side is described in
 | NIC | `0000:2d:00.0`, `8086:125c` rev 04 |
 | Driver | `igc`, in the stock kernel; nothing to install |
 | Interface name | `enp45s0` (bus 0x2d = 45); confirm on TrueNAS |
-| MAC | `c4:62:37:0f:aa:22` |
 | Link | 5 GT/s x1, 4 Gb/s, enough for 2.5GbE |
 
 ## The problem TrueNAS has to work around
@@ -194,8 +193,8 @@ lost with it:
   every stage is saved by name.
 
 Also worth writing down: this branch is `lemp11-mods` on `origin`
-(`github.com:Alan-JH/ec.git`), and the NIC is `c4:62:37:0f:aa:22`, which was
-`10.1.35.12/26` by DHCP.
+(`github.com:Alan-JH/ec.git`). The NIC's MAC is not recorded here; read it from
+`ip link show enp45s0` when you need it.
 
 ## Verifying on TrueNAS
 
