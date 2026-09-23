@@ -167,22 +167,31 @@ at 70 °C, so nothing above 70 °C changes.
 The fan only runs in S0: `fan_get_duty()` returns 0 in any other power state,
 so this does not add idle draw while the machine is off.
 
-**Check that 20% actually spins this fan before relying on it.** Duties that
-are too low can stall it or make it whine. `fan_pwm` takes a raw 0–255 value,
-where 20% is 51:
+**Check that 20% actually spins this fan.** Duties that are too low can stall
+it or make it whine.
+
+**Host PWM control does not work in this firmware, so it cannot be used to
+probe duties.** Neither algorithm consults `fan_get_mode()`:
+`fan_update_target()` (`fan/step.c`) and `fan_event()` (`fan/interp.c`) both
+recompute the duty from the curve and write `FAN1_PWM` every cycle, so an
+`ectool fan_pwm` value is overwritten within a second. `fan_mode pwm` only sets
+a variable that nothing reads. Neither command reports an error. (`fan_pwm`
+does return `Protocol(1)` while the mode is `auto`, and for fan index 0, since
+fans are numbered from 1 — but succeeding does not mean it took effect.)
+
+Read the EC's own view instead, through `system76_acpi`, which needs no sudo:
 
 ```sh
-ECTOOL=tools/system76_ectool/target/release/system76_ectool
-sudo $ECTOOL fan_mode pwm     # fan_set_pwm returns RES_ERR in auto mode
-sudo $ECTOOL fan_pwm 1 51
-sudo $ECTOOL fan_rpm 1
-sudo $ECTOOL fan_mode auto    # hand the fan back to the EC
+watch -n 1 'cat /sys/class/hwmon/hwmon3/temp1_input \
+    /sys/class/hwmon/hwmon3/pwm1 /sys/class/hwmon/hwmon3/fan1_input'
 ```
 
-A non-zero, steady RPM means 20% is usable; raise the two points if it is not.
-`cmd_fan_set_pwm()` fails unless the mode is `pwm`, which is what
-`Protocol(1)` (`RES_ERR`) means if the mode step is skipped. Fans are numbered
-from 1, so index 0 also returns `Protocol(1)`.
+`pwm1` is the duty the EC applied, 0–255, and it is read-only. On the stock
+curve at 67 °C idle, it reads `0` with `fan1_input` also `0`: the fan is off and
+nothing moves air. With this change, expect about 94 (37%) at that temperature,
+and 51 (20%) once the temperature falls below 50 °C. **If `fan1_input` is 0
+while `pwm1` is 51, the fan stalls at 20%** and the two points should move to
+25 or 30%.
 
 ## 5. USB power follows the adapter
 
