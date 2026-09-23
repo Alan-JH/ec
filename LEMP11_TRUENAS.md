@@ -170,6 +170,33 @@ Also worth knowing without a keyboard attached:
   keyboard: `info`, `fan_rpm 1` and `fan_pwm 1` (fans are numbered from 1;
   index 0 returns `Protocol(1)`), and `console` for the EC log.
 
+## Before reinstalling the OS
+
+Installing TrueNAS wipes this disk. These live outside the repo and would be
+lost with it:
+
+- **`~/ec-roms/factory-2025-08-11_fe9c05c.rom`, sha256 `4cc7e381…`, is
+  irreplaceable.** It is the only copy of the shipped EC firmware. Its source
+  commit is not on upstream master and cannot be fetched, so it cannot be
+  rebuilt — it exists only because the first `flash_internal` dumped the running
+  ROM. **Copy it off this machine before installing.**
+- The other images in `~/ec-roms` are reproducible from this branch with
+  SDCC 4.5.0, given the same `VERSION` string. Copying them out anyway saves
+  setting up a toolchain later. Currently running: `stage4-fan-floor`, sha256
+  `ba7f874e…`, which the tip builds byte for byte.
+- **`tools/system76_ectool/target/release/system76_ectool`** is gitignored and
+  needs Rust to build. TrueNAS has no toolchain and is not the place to add one,
+  so keep an Ubuntu live USB around: boot it, clone this branch, `make
+  BOARD=system76/lemp11 flash_internal`, or run the binary against a saved
+  `.rom`. Flashing the EC from TrueNAS itself is not worth attempting.
+- `backup.rom` in the repo is gitignored and holds whatever the last flash
+  replaced. Every `flash_internal` overwrites it. Nothing here needs it, since
+  every stage is saved by name.
+
+Also worth writing down: this branch is `lemp11-mods` on `origin`
+(`github.com:Alan-JH/ec.git`), and the NIC is `c4:62:37:0f:aa:22`, which was
+`10.1.35.12/26` by DHCP.
+
 ## Verifying on TrueNAS
 
 From the TrueNAS shell, after a reboot:

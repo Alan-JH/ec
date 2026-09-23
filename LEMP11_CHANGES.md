@@ -183,9 +183,12 @@ fans are numbered from 1 — but succeeding does not mean it took effect.)
 Read the EC's own view instead, through `system76_acpi`, which needs no sudo:
 
 ```sh
-watch -n 1 'cat /sys/class/hwmon/hwmon3/temp1_input \
-    /sys/class/hwmon/hwmon3/pwm1 /sys/class/hwmon/hwmon3/fan1_input'
+H=$(grep -l system76_acpi /sys/class/hwmon/hwmon*/name | xargs dirname)
+watch -n 1 "cat $H/temp1_input $H/pwm1 $H/fan1_input"
 ```
+
+(The hwmon number is not stable across boots or distributions, hence the
+lookup by name.)
 
 `pwm1` is the duty the EC applied, 0–255, and it is read-only. On the stock
 curve at 67 °C idle, it reads `0` with `fan1_input` also `0`: the fan is off and
