@@ -13,6 +13,12 @@ SPDX-License-Identifier = "CC0-1.0"
 SPDX-FileCopyrightText = "NONE"
 
 [[annotations]]
+path = ["roms/*.rom"]
+precedence = "override"
+SPDX-License-Identifier = "GPL-3.0-only"
+SPDX-FileCopyrightText = "2025 System76, Inc."
+
+[[annotations]]
 path = [
     "Makefile",
     "README.md",

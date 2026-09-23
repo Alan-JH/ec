@@ -174,15 +174,13 @@ Also worth knowing without a keyboard attached:
 Installing TrueNAS wipes this disk. These live outside the repo and would be
 lost with it:
 
-- **`~/ec-roms/factory-2025-08-11_fe9c05c.rom`, sha256 `4cc7e381…`, is
-  irreplaceable.** It is the only copy of the shipped EC firmware. Its source
-  commit is not on upstream master and cannot be fetched, so it cannot be
-  rebuilt — it exists only because the first `flash_internal` dumped the running
-  ROM. **Copy it off this machine before installing.**
-- The other images in `~/ec-roms` are reproducible from this branch with
-  SDCC 4.5.0, given the same `VERSION` string. Copying them out anyway saves
-  setting up a toolchain later. Currently running: `stage4-fan-floor`, sha256
-  `ba7f874e…`, which the tip builds byte for byte.
+- **Every image is now committed under `roms/`**, including
+  `factory-2025-08-11_fe9c05c.rom`, which cannot be rebuilt: its source commit
+  is not on upstream master and cannot be fetched, and it exists only because
+  the first `flash_internal` dumped the running ROM. Cloning the repo is
+  therefore enough to recover any of them, but keep a copy on a USB stick too,
+  since that one file cannot be regenerated from anything. Currently running:
+  `stage4-fan-floor`, which the tip builds byte for byte. See `roms/README.md`.
 - **`tools/system76_ectool/target/release/system76_ectool`** is gitignored and
   needs Rust to build. TrueNAS has no toolchain and is not the place to add one,
   so keep an Ubuntu live USB around: boot it, clone this branch, `make
