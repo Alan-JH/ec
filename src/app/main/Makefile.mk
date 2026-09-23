@@ -75,6 +75,12 @@ ifeq ($(CONFIG_WAKE_ON_LAN),y)
 CFLAGS += -DCONFIG_WAKE_ON_LAN=1
 endif
 
+# Power USB ports from the adapter, including while the system is off.
+# Requires the board to define the USB_CHARGE_EN GPIO.
+ifeq ($(CONFIG_USB_CHARGE_ON_AC),y)
+CFLAGS += -DCONFIG_USB_CHARGE_ON_AC=1
+endif
+
 # Set battery charging thresholds
 BATTERY_START_THRESHOLD?=90
 BATTERY_END_THRESHOLD?=100

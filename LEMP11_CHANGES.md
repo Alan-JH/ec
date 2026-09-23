@@ -5,10 +5,10 @@ SPDX-FileCopyrightText: NONE
 
 # lemp11 local modifications
 
-Four out-of-tree changes to `system76/lemp11`, for a machine with the M.2 A+E
+Five out-of-tree changes to `system76/lemp11`, for a machine with the M.2 A+E
 WiFi card replaced by an Intel I226-V 2.5G NIC on an A+E adapter, running as a
 headless NAS outside its chassis. Wake on LAN (section 1) failed on hardware
-and is switched off; the other three are in use.
+and is switched off; the other four are in use.
 The NIC itself, including the adapter mod it needs, is covered in
 `LEMP11_TRUENAS.md`.
 
@@ -172,13 +172,56 @@ are too low can stall it or make it whine. `fan_pwm` takes a raw 0–255 value,
 where 20% is 51:
 
 ```sh
-sudo tools/system76_ectool/target/release/system76_ectool fan_pwm 1 51
-sudo tools/system76_ectool/target/release/system76_ectool fan_rpm 1
+ECTOOL=tools/system76_ectool/target/release/system76_ectool
+sudo $ECTOOL fan_mode pwm     # fan_set_pwm returns RES_ERR in auto mode
+sudo $ECTOOL fan_pwm 1 51
+sudo $ECTOOL fan_rpm 1
+sudo $ECTOOL fan_mode auto    # hand the fan back to the EC
 ```
 
 A non-zero, steady RPM means 20% is usable; raise the two points if it is not.
-`fan_pwm` takes the fan out of EC control until the next power cycle, so reboot
-afterwards, and remember fans are numbered from 1.
+`cmd_fan_set_pwm()` fails unless the mode is `pwm`, which is what
+`Protocol(1)` (`RES_ERR`) means if the mode step is skipped. Fans are numbered
+from 1, so index 0 also returns `Protocol(1)`.
+
+## 5. USB power follows the adapter
+
+`CONFIG_USB_CHARGE_ON_AC`, so that a JetKVM or similar can stay powered while
+the machine is off, without touching the battery.
+
+| File | Change |
+| --- | --- |
+| `src/board/system76/lemp11/gpio.c`, `include/board/gpio.h` | declare `USB_CHARGE_EN = GPIO(F, 1)` under the option |
+| `src/board/system76/lemp11/board.c` | set it from `ACIN_N` in `board_init()`, since `power_event()` only sees edges |
+| `src/app/main/power/intel.c` | both AC branches of `power_event()` follow the adapter |
+| `src/app/main/Makefile.mk`, board `Makefile.mk` | `CONFIG_USB_CHARGE_ON_AC` |
+
+`USB_CHARGE_EN` (GPF1) is the port-power signal that upstream configures as an
+output and then never drives — it is left low on every board in this repo.
+The name matches the "charge while the system is off" feature on these Clevo
+designs. `USB_PWR_EN` (GPE3), which is separate and already driven high at
+init, is left alone.
+
+With the option on, the line simply mirrors the adapter: high while AC is
+connected in any power state, low the moment it is unplugged. So a KVM stays up
+across a shutdown, and an outage cuts it instead of draining the pack. Boards
+that do not set the option build byte-identical firmware (checked for lemp12).
+
+**Three things to confirm on hardware, none of them knowable from this repo:**
+
+- **which port** GPF1 controls — likely one USB-A port, possibly the one marked
+  with a lightning bolt;
+- **whether the rail behind it survives `power_off()`.** If that rail drops with
+  the PCH wells, the GPIO cannot help and this change is useless;
+- **that the ports still behave normally while the machine is running.**
+
+Test by plugging a phone or a USB light into each port, shutting down with AC
+connected, and then unplugging AC. The light should stay on across the
+shutdown and go out when the adapter is removed.
+
+If the JetKVM is powered this way, remember it dies during an outage while the
+NAS keeps running on the battery, so remote console is gone exactly when the
+machine is running unattended. A power bank with pass-through avoids that.
 
 ## Not implemented: scheduled boot
 
@@ -205,6 +248,7 @@ risk. Check one out, build, flash, test, then move to the next.
 | 2 | `power: Add option to power on when AC is restored` | boot path only |
 | 3 | `lemp11: Add wake on LAN via PCIE_WAKE#` plus `power: Follow AC for the M.2 card while off` | off-state rail behaviour; **failed, see section 1** |
 | 4 | `lemp11: Add a fan floor for running outside the chassis` | no — fan curve data only |
+| 5 | `lemp11: Follow the adapter for USB port power` | no — one GPIO, off the power path |
 
 The branch tip has `CONFIG_WAKE_ON_LAN = n`, so it builds stage 2. That is the
 image to run.
@@ -312,3 +356,6 @@ firmware.
   `~/ec-roms/stage2-ac-restore.rom`.
 - Stage 4 (`stage4-fan-floor`) builds and lints, and is **not yet flashed.**
   Confirm the fan spins at 20% first, as section 4 describes.
+- Stage 5 (`stage5-usb-charge`) builds and lints, and is **not yet flashed.**
+  It is a separate commit from stage 4 so that either can be reverted on its
+  own. Section 5 lists what to check once it is on.

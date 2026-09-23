@@ -404,6 +404,11 @@ void power_event(void) {
             DEBUG("unplugged\n");
             battery_charger_disable();
 
+#if CONFIG_USB_CHARGE_ON_AC
+            // Stop powering USB devices, so that they cannot drain the battery
+            gpio_set(&USB_CHARGE_EN, false);
+#endif // CONFIG_USB_CHARGE_ON_AC
+
 #if CONFIG_WAKE_ON_LAN
             // Stop powering the card while off, so that it cannot drain the
             // battery
@@ -415,6 +420,11 @@ void power_event(void) {
         } else {
             DEBUG("plugged in\n");
             battery_charger_configure();
+
+#if CONFIG_USB_CHARGE_ON_AC
+            // Power USB devices, in any power state
+            gpio_set(&USB_CHARGE_EN, true);
+#endif // CONFIG_USB_CHARGE_ON_AC
 
             // Set CPU power limit to AC limit, if there is available current
             //TODO: if this returns false, retry?

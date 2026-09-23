@@ -18,6 +18,10 @@ void board_init(void) {
     gpio_set(&BKL_EN, true);
     // Enable camera
     gpio_set(&CCD_EN, true);
+#if CONFIG_USB_CHARGE_ON_AC
+    // Follow the adapter from the first cycle; power_event() only sees edges
+    gpio_set(&USB_CHARGE_EN, !gpio_get(&ACIN_N));
+#endif // CONFIG_USB_CHARGE_ON_AC
     // Assert SMI#, SCI#, and SWI#
     gpio_set(&SCI_N, true);
     gpio_set(&SMI_N, true);
