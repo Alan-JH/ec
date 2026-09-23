@@ -117,6 +117,50 @@ Wake from suspend (`s2idle`) might still work, since it can use an in-band PCIe
 PME instead of the missing wake pin. It is untested, and TrueNAS does not
 support suspend, so it is not pursued here.
 
+## Headless operation
+
+The board runs outside the chassis, with the display and keyboard
+disconnected and the battery still attached. Checked on 2026-09-22: the NIC
+enumerates at boot and links at 2.5 Gb/s, the EC answers over LPC
+(`system76_ectool info` reports `stage2-ac-restore`), the charge thresholds
+still hold the pack at 76%, and i915 comes up with no panel attached.
+
+Two things to set up in software:
+
+1. **Ignore the lid switch.** With the chassis gone the lid signal reads
+   `open`, because the EC's input has an internal pull up
+   (`{ &GPCRB1, GPIO_IN | GPIO_UP }`, active low) and nothing drives it.
+   Moving a magnet around the board did not change
+   `/proc/acpi/button/lid/LID0/state`, so the sensor left with the chassis.
+   Set this anyway, so that a stray magnet or a re-attached sensor can never
+   suspend a headless machine. In `/etc/systemd/logind.conf`:
+
+   ```
+   HandleLidSwitch=ignore
+   HandleLidSwitchExternalPower=ignore
+   HandleLidSwitchDocked=ignore
+   ```
+
+   Then `systemctl restart systemd-logind`, or reboot. On TrueNAS, check that
+   the file survives an update; if it does not, re-apply it from an Init
+   command.
+
+2. **Make sure NTP is on.** Disconnecting the battery resets the RTC: the boot
+   on 2026-09-22 started at `2026-06-05 11:35` until NTP corrected it about a
+   minute in. TrueNAS enables NTP by default (**System → General → NTP
+   Servers**). Expect wrong log timestamps in the first seconds of a boot
+   after any power loss, and expect anything time-sensitive, such as
+   certificates or replication, to complain until the clock is set.
+
+Also worth knowing without a keyboard attached:
+
+- Fn+Esc, which resets the EC config including the charge thresholds, is not
+  reachable. Use the `charge_control_*_threshold` sysfs files instead, as in
+  `LEMP11_CHANGES.md` section 3.
+- `system76_ectool` works over LPC, so the EC stays reachable with no
+  keyboard: `info`, `fan_rpm 1` and `fan_pwm 1` (fans are numbered from 1;
+  index 0 returns `Protocol(1)`), and `console` for the EC log.
+
 ## Verifying on TrueNAS
 
 From the TrueNAS shell, after a reboot:
