@@ -20,12 +20,13 @@ reproduce these byte for byte.
 | `stage2-ac-restore.rom` | `ead6ecc7…` | `2e135b3` |
 | `stage3-wol.rom` | `75cb8d27…` | `b407aee` |
 | `stage3-wol-pullup.rom` | `a0dead05…` | `b407aee` plus an uncommitted `GPIO_UP` on C3 |
-| `stage3-no-acrestore.rom` | `bb381830…` | `1145fba` with `CONFIG_POWER_ON_AC=n` |
+| `stage3-no-acrestore.rom` | `bb381830…` | `b407aee` plus that pull-up, built `CONFIG_POWER_ON_AC=n` |
 | `stage4-fan-floor.rom` | `ba7f874e…` | `d1267ca` — **currently running** |
 | `stage5-usb-charge.rom` | `da98b5df…` | `eada292` |
 
-Every "built from" row except the factory image and the two experiments was
-verified by rebuilding that commit and comparing byte for byte.
+Every "built from" row except the factory image was verified by rebuilding it
+and comparing byte for byte, including the two experiments: the pull-up was
+`{ &GPCRC3, GPIO_IN | GPIO_UP }` in the board's `gpio.c`.
 
 The `VERSION` string is part of the image, so a rebuild must pass the same one,
 which is the file's basename:
@@ -34,10 +35,10 @@ which is the file's basename:
 make BOARD=system76/lemp11 VERSION=stage4-fan-floor
 ```
 
-Two images no longer match any commit as-is: `stage3-wol-pullup` came from a
+Two images match no commit on their own: `stage3-wol-pullup` came from a
 pull-up experiment that was reverted (`LEMP11_CHANGES.md` section 1), and
-`stage3-no-acrestore` came from a command-line override used to rule stage 2 out.
-Both only exist here.
+`stage3-no-acrestore` is that same tree built with a command-line override, to
+rule stage 2 out as the cause of the false wakes. Both exist only here.
 
 ## The factory image
 
