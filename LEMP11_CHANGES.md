@@ -421,5 +421,6 @@ firmware.
   hardware**: the machine boots once the adapter has stayed connected, rather
   than on the instant it arrives. The `AC restore cancelled` path, where the
   adapter goes away before the delay elapses, was not watched on the console.
-- Stage 7 (`stage7-ac-delay-30s`) raises the delay to 30 s and is **not yet
-  flashed.** Only the constant differs from stage 6.
+- Stage 7 (`stage7-ac-delay-30s`) raises the delay to 30 s, flashed
+  2026-10-30 and **confirmed on hardware.** Only the constant differs from
+  stage 6.
