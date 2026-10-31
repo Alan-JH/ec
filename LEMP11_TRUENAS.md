@@ -105,7 +105,10 @@ stage 2 of the EC changes instead, which boots the machine when AC arrives
 while it is off:
 
 - Put the laptop's adapter on a smart plug. To power the NAS on remotely,
-  switch the plug off, then on again.
+  switch the plug off, then on again, and leave it on: the EC waits for the
+  adapter to stay connected for 20 s before booting, so that a supply flapping
+  its way back from an outage cannot boot the machine repeatedly
+  (`CONFIG_POWER_ON_AC_DELAY_MS`, `LEMP11_CHANGES.md` section 2).
 - The same behaviour brings the machine back after a power outage.
 - A shutdown with AC attached leaves the machine off, since there is no AC
   edge. Confirmed on 2026-09-22, so shutting down from the TrueNAS UI works as

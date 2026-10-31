@@ -23,6 +23,7 @@ reproduce these byte for byte.
 | `stage3-no-acrestore.rom` | `bb381830…` | `b407aee` plus that pull-up, built `CONFIG_POWER_ON_AC=n` |
 | `stage4-fan-floor.rom` | `ba7f874e…` | `d1267ca` — **currently running** |
 | `stage5-usb-charge.rom` | `da98b5df…` | `eada292` |
+| `stage6-ac-delay.rom` | `89f2b3dc…` | tip of `lemp11-mods` — **not yet flashed** |
 
 Every "built from" row except the factory image was verified by rebuilding it
 and comparing byte for byte, including the two experiments: the pull-up was

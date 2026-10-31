@@ -33,8 +33,10 @@ CONFIG_CHARGER_CHARGE_CURRENT = 3072
 CONFIG_CHARGER_CHARGE_VOLTAGE = 8800
 CONFIG_CHARGER_INPUT_CURRENT = 3420
 
-# Power on when the AC adapter is connected
+# Power on when the AC adapter is connected, once it has stayed connected for
+# 20 s, so that a flapping supply during an outage cannot boot the system
 CONFIG_POWER_ON_AC = y
+CONFIG_POWER_ON_AC_DELAY_MS = 20000
 
 # Wake on LAN via PCIE_WAKE# (C3). Off: on this board the M.2 A+E slot's
 # PEWAKE# does not reach C3, and C3 reads low once power_off() runs, so the

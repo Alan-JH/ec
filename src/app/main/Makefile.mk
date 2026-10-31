@@ -67,6 +67,11 @@ include $(APP_DIR)/fan/Makefile.mk
 # Power on when the AC adapter is connected
 ifeq ($(CONFIG_POWER_ON_AC),y)
 CFLAGS += -DCONFIG_POWER_ON_AC=1
+# How long the adapter must stay connected before the system powers on, in ms.
+# 0 powers on immediately. systick_t is 16-bit milliseconds, so the maximum is
+# under 65536; keep a margin.
+CONFIG_POWER_ON_AC_DELAY_MS?=0
+CFLAGS += -DPOWER_ON_AC_DELAY_MS=$(CONFIG_POWER_ON_AC_DELAY_MS)
 endif
 
 # Keep the M.2 card powered while off so that it can assert LAN_WAKEUP#.

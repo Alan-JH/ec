@@ -102,11 +102,32 @@ switch it off and on.
 `POWER_WAKEUP_TYPE_AC_POWER_RESTORED` (an SMBIOS wake type already defined in
 `app/power.h` but never used). Gated on `CONFIG_POWER_ON_AC`.
 
+**`CONFIG_POWER_ON_AC_DELAY_MS` (20 s here) makes the adapter prove itself
+first.** Without it, the first instant of mains power boots the machine, and a
+supply that flaps on the way back from an outage boots it over and over, each
+time part way into a shutdown. With it, the AC edge only arms a timer: the
+adapter has to stay connected for the whole delay, and losing it clears the
+timer and nothing happens.
+
+The countdown lives in `power_event()`, which runs every 1 ms, so it costs one
+flag and one `systick_t` and no new timer. `systick_t` is 16-bit milliseconds
+and wraps every 65.5 s, which is why the delay is compared with unsigned
+subtraction and an `#error` rejects anything above 60000. The delay defaults to
+0, which keeps the old immediate behaviour, so boards that do not set it build
+byte-identical firmware (checked for lemp12).
+
+On the EC console the sequence reads `AC restored, waiting`, then either
+`AC restored` when it fires or `AC restore cancelled` if the adapter goes away.
+The power switch still works during the wait, and the timer is dropped if
+anything else has already powered the system on.
+
 Behaviour worth knowing:
 
 - a normal shutdown with AC already attached produces no edge, so it does not
   fight you (confirmed 2026-09-22: off for 100 s on AC, no wake);
-- unplugging and replugging AC while off **will** boot the machine;
+- unplugging and replugging AC while off **will** boot the machine, 20 s after
+  the adapter is back;
+- a smart plug switched off and on therefore has to stay on for 20 s;
 - if the EC cold-boots because AC arrived on a dead battery, the machine boots —
   the intended outage-recovery case (not tested);
 - flashing stage 2 over stage 3 with AC attached left the machine off. The
@@ -276,6 +297,7 @@ risk. Check one out, build, flash, test, then move to the next.
 | 3 | `lemp11: Add wake on LAN via PCIE_WAKE#` plus `power: Follow AC for the M.2 card while off` | off-state rail behaviour; **failed, see section 1** |
 | 4 | `lemp11: Add a fan floor for running outside the chassis` | no — fan curve data only |
 | 5 | `lemp11: Follow the adapter for USB port power` | no — one GPIO, off the power path; **failed, see section 5** |
+| 6 | `power: Require AC to persist before powering on` | boot path only — delays an existing `power_on()` |
 
 The branch tip has `CONFIG_WAKE_ON_LAN = n`, so it builds stage 2. That is the
 image to run.
@@ -393,5 +415,7 @@ firmware.
   So 20% spins this fan reliably, and idle runs 17 °C cooler. The stock curve
   was letting the board sit at 67 °C with no airflow at all.
 - Stage 5 (`stage5-usb-charge`) flashed 2026-09-22 and **failed on hardware.**
-  See section 5. `CONFIG_USB_CHARGE_ON_AC` is now `n`, which makes the tip build
-  the stage 4 image again.
+  See section 5. `CONFIG_USB_CHARGE_ON_AC` is now `n`.
+- Stage 6 (`stage6-ac-delay`) builds and lints, and is **not yet flashed.**
+  Check on hardware that a brief AC connection, under 20 s, leaves the machine
+  off, and that a sustained one still boots it after the delay.

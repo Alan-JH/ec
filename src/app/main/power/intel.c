@@ -137,6 +137,16 @@ enum PowerState power_state = POWER_STATE_OFF;
 // Note: Must not be Reserved (0x00) or Unknown (0x02) when reported.
 enum PowerWakeupType power_wakeup_type = POWER_WAKEUP_TYPE_UNKNOWN;
 
+#if CONFIG_POWER_ON_AC && POWER_ON_AC_DELAY_MS > 0
+#if POWER_ON_AC_DELAY_MS > 60000
+#error POWER_ON_AC_DELAY_MS must fit in systick_t with a margin
+#endif
+// Set while waiting out POWER_ON_AC_DELAY_MS before powering on. The adapter
+// going away clears it, so only a supply that stays up boots the system.
+static bool power_on_ac_pending = false;
+static systick_t power_on_ac_time = 0;
+#endif // CONFIG_POWER_ON_AC && POWER_ON_AC_DELAY_MS
+
 #if CONFIG_WAKE_ON_LAN
 // True when the EC must keep the M.2 card powered while the system is off, so
 // that it can assert LAN_WAKEUP#. Only done on AC, so that the battery is
@@ -445,9 +455,17 @@ void power_event(void) {
             // returns after a power failure
             update_power_state();
             if (power_state == POWER_STATE_OFF) {
+#if POWER_ON_AC_DELAY_MS > 0
+                // Wait for the adapter to stay connected, so that a flapping
+                // supply cannot boot the system
+                DEBUG("%02X: AC restored, waiting\n", main_cycle);
+                power_on_ac_pending = true;
+                power_on_ac_time = time_get();
+#else
                 DEBUG("%02X: AC restored\n", main_cycle);
                 power_on();
                 power_wakeup_type = POWER_WAKEUP_TYPE_AC_POWER_RESTORED;
+#endif // POWER_ON_AC_DELAY_MS
             }
 #endif // CONFIG_POWER_ON_AC
         }
@@ -465,6 +483,24 @@ void power_event(void) {
         }
     }
     ac_last = ac_new;
+
+#if CONFIG_POWER_ON_AC && POWER_ON_AC_DELAY_MS > 0
+    if (power_on_ac_pending) {
+        if (ac_new) {
+            // Adapter went away again before the delay elapsed
+            DEBUG("%02X: AC restore cancelled\n", main_cycle);
+            power_on_ac_pending = false;
+        } else if ((time_get() - power_on_ac_time) >= POWER_ON_AC_DELAY_MS) {
+            power_on_ac_pending = false;
+            update_power_state();
+            if (power_state == POWER_STATE_OFF) {
+                DEBUG("%02X: AC restored\n", main_cycle);
+                power_on();
+                power_wakeup_type = POWER_WAKEUP_TYPE_AC_POWER_RESTORED;
+            }
+        }
+    }
+#endif // CONFIG_POWER_ON_AC && POWER_ON_AC_DELAY_MS
 
     gpio_set(&AC_PRESENT, !ac_new);
 
