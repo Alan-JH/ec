@@ -297,7 +297,7 @@ risk. Check one out, build, flash, test, then move to the next.
 | 3 | `lemp11: Add wake on LAN via PCIE_WAKE#` plus `power: Follow AC for the M.2 card while off` | off-state rail behaviour; **failed, see section 1** |
 | 4 | `lemp11: Add a fan floor for running outside the chassis` | no — fan curve data only |
 | 5 | `lemp11: Follow the adapter for USB port power` | no — one GPIO, off the power path; **failed, see section 5** |
-| 6 | `power: Require AC to persist before powering on` | boot path only — delays an existing `power_on()` |
+| 6 | `power: Require AC to persist before powering on` (branch tip) | boot path only — delays an existing `power_on()` |
 
 The branch tip has `CONFIG_WAKE_ON_LAN = n`, so it builds stage 2. That is the
 image to run.
@@ -416,6 +416,7 @@ firmware.
   was letting the board sit at 67 °C with no airflow at all.
 - Stage 5 (`stage5-usb-charge`) flashed 2026-09-22 and **failed on hardware.**
   See section 5. `CONFIG_USB_CHARGE_ON_AC` is now `n`.
-- Stage 6 (`stage6-ac-delay`) builds and lints, and is **not yet flashed.**
-  Check on hardware that a brief AC connection, under 20 s, leaves the machine
-  off, and that a sustained one still boots it after the delay.
+- Stage 6 (`stage6-ac-delay`) flashed 2026-10-30 and **confirmed on
+  hardware**: the machine boots once the adapter has stayed connected, rather
+  than on the instant it arrives. The `AC restore cancelled` path, where the
+  adapter goes away before the delay elapses, was not watched on the console.
